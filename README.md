@@ -1,1 +1,1 @@
-# Beuaty Of Bezier Curve
+# Beauty Of Bezier Curve
