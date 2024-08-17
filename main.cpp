@@ -1,68 +1,137 @@
 #include <SDL2/SDL.h>
 #include <iostream>
-#include <cmath>
+#include <list>
 
-void drawLine(SDL_Renderer* renderer, SDL_Point p1, SDL_Point p2) {
-    SDL_RenderDrawLine(renderer, p1.x, p1.y, p2.x, p2.y);
+SDL_Point BezierPoint(float t, SDL_Point p0, SDL_Point p1, SDL_Point p2, SDL_Point p3)
+{
+    SDL_Point result;
+    float u = 1 - t;
+    float tt = t * t;
+    float uu = u * u;
+    float uuu = uu * u;
+    float ttt = tt * t;
+
+    result.x = uuu * p0.x + 3 * uu * t * p1.x + 3 * u * tt * p2.x + ttt * p3.x;
+    result.y = uuu * p0.y + 3 * uu * t * p1.y + 3 * u * tt * p2.y + ttt * p3.y;
+
+    return result;
 }
 
-void drawBezierCurve(SDL_Renderer* renderer, SDL_Point p0, SDL_Point p1, SDL_Point p2) {
-    const int num_points = 100;
-    SDL_Point prev_point = p0;
-    for (int i = 0; i <= num_points; ++i) {
-        float t = i / static_cast<float>(num_points);
-        float x = std::pow(1 - t, 2) * p0.x + 2 * (1 - t) * t * p1.x + std::pow(t, 2) * p2.x;
-        float y = std::pow(1 - t, 2) * p0.y + 2 * (1 - t) * t * p1.y + std::pow(t, 2) * p2.y;
-        SDL_Point point = { static_cast<int>(x), static_cast<int>(y) };
-        if (i > 0) {
-            drawLine(renderer, prev_point, point);
+int main(int argc, char **argv)
+{
+    bool quit = false;
+    SDL_Event event;
+
+    SDL_Init(SDL_INIT_VIDEO);
+    SDL_Window *window = SDL_CreateWindow("rect", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 640, 480, 0);
+    SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, 0);
+
+    SDL_Rect rect1 = {290, 210, 10, 10};
+    SDL_Rect rect2 = {100, 100, 10, 10};
+    SDL_Rect rect3 = {500, 100, 10, 10};
+    SDL_Rect rect4 = {100, 400, 10, 10};
+
+    std::list<SDL_Rect *> rectangles;
+    rectangles.push_back(&rect1);
+    rectangles.push_back(&rect2);
+    rectangles.push_back(&rect3);
+    rectangles.push_back(&rect4);
+
+    SDL_Rect *selectedRect = NULL;
+    bool leftMouseButtonDown = false;
+    SDL_Point clickOffset;
+    SDL_Point mousePos;
+    while (!quit)
+    {
+        SDL_Delay(10);
+        SDL_PollEvent(&event);
+
+        switch (event.type)
+        {
+        case SDL_QUIT:
+            quit = true;
+            break;
+        case SDL_KEYDOWN:
+            if (event.key.keysym.sym == SDLK_ESCAPE)
+                quit = true;
+            break;
+        case SDL_MOUSEMOTION:
+            mousePos = {event.motion.x, event.motion.y};
+            if (leftMouseButtonDown && selectedRect != NULL)
+            {
+                selectedRect->x = mousePos.x - clickOffset.x;
+                selectedRect->y = mousePos.y - clickOffset.y;
+            }
+            break;
+        case SDL_MOUSEBUTTONUP:
+            if (leftMouseButtonDown && event.button.button == SDL_BUTTON_LEFT)
+            {
+                leftMouseButtonDown = false;
+                selectedRect = NULL;
+            }
+            break;
+        case SDL_MOUSEBUTTONDOWN:
+            if (!leftMouseButtonDown && event.button.button == SDL_BUTTON_LEFT)
+            {
+                leftMouseButtonDown = true;
+                for (auto rect : rectangles)
+                {
+                    if (SDL_PointInRect(&mousePos, rect))
+                    {
+                        selectedRect = rect;
+                        clickOffset.x = mousePos.x - rect->x;
+                        clickOffset.y = mousePos.y - rect->y;
+                        break;
+                    }
+                }
+            }
+        default:
+            break;
         }
-        prev_point = point;
+
+        // rendering points
+        SDL_SetRenderDrawColor(renderer, 12, 45, 72, 200);
+        SDL_RenderClear(renderer);
+        for (auto const &rect : rectangles)
+        {
+            if (rect == selectedRect)
+                SDL_SetRenderDrawColor(renderer, 100, 140, 155, 200);
+            else
+                SDL_SetRenderDrawColor(renderer, 200, 240, 255, 255);
+            SDL_RenderFillRect(renderer, rect);
+        }
+
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+        for (auto it = rectangles.begin(); it != rectangles.end(); ++it)
+        {
+            auto next_it = std::next(it);
+            if (next_it != rectangles.end())
+            {
+                SDL_Rect *rect1 = *it;
+                SDL_Rect *rect2 = *next_it;
+                SDL_RenderDrawLine(renderer, rect1->x + rect1->w / 2, rect1->y + rect1->h / 2, rect2->x + rect2->w / 2,
+                                   rect2->y + rect2->h / 2);
+            }
+        }
+
+        // draw cubic bezier curve
+        SDL_Point p0 = {rect1.x + rect1.w / 2, rect1.y + rect1.h / 2};
+        SDL_Point p1 = {rect2.x + rect2.w / 2, rect2.y + rect2.h / 2};
+        SDL_Point p2 = {rect3.x + rect3.w / 2, rect3.y + rect3.h / 2};
+        SDL_Point p3 = {rect4.x + rect4.w / 2, rect4.y + rect4.h / 2};
+
+        // Draw the cubic Bezier curve
+        SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255); // Red color for the curve
+        SDL_Point prevPoint = p0;
+        for (float t = 0.0; t <= 1.0; t += 0.01)
+        {
+            SDL_Point currentPoint = BezierPoint(t, p0, p1, p2, p3);
+            SDL_RenderDrawLine(renderer, prevPoint.x, prevPoint.y, currentPoint.x, currentPoint.y);
+            prevPoint = currentPoint;
+        }
+        SDL_RenderPresent(renderer);
     }
-}
 
-int main(int argc, char* argv[]) {
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-        std::cerr << "SDL could not initialize! SDL_Error: " << SDL_GetError() << std::endl;
-        return 1;
-    }
-
-    SDL_Window* window = SDL_CreateWindow("Quadratic Bézier Curve", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 800, 600, SDL_WINDOW_SHOWN);
-    if (!window) {
-        std::cerr << "Window could not be created! SDL_Error: " << SDL_GetError() << std::endl;
-        SDL_Quit();
-        return 1;
-    }
-
-    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-    if (!renderer) {
-        std::cerr << "Renderer could not be created! SDL_Error: " << SDL_GetError() << std::endl;
-        SDL_DestroyWindow(window);
-        SDL_Quit();
-        return 1;
-    }
-
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255); 
-    SDL_RenderClear(renderer);
-
-    // Get user input
-    SDL_Point p0, p1, p2;
-    std::cout << "Enter coordinates for point P0 (x y): ";
-    std::cin >> p0.x >> p0.y;
-    std::cout << "Enter coordinates for point P1 (x y): ";
-    std::cin >> p1.x >> p1.y;
-    std::cout << "Enter coordinates for point P2 (x y): ";
-    std::cin >> p2.x >> p2.y;
-
-    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); 
-
-    drawBezierCurve(renderer, p0, p1, p2);
-
-    SDL_RenderPresent(renderer);
-
-    SDL_Delay(5000);
-
-    // Clean up
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
