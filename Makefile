@@ -1,7 +1,7 @@
 CC = g++
 CFLAGS = -Wall -g
 LDFLAGS = `sdl2-config --cflags --libs`
-TARGET = main
+TARGET = main 
 SRC = main.cpp
 
 all: $(TARGET)

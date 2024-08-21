@@ -19,6 +19,14 @@ class CubicBezier
                         uuu * p0.y + 3 * uu * t * p1.y + 3 * u * tt * p2.y + ttt * p3.y};
         return p;
     }
+    SDL_FPoint velocity(float t) const
+    {
+        float tt = t * t;
+        SDL_FPoint velocity = {
+            p0.x * (-3 * tt + 6 * t - 3) + p1.x * (9 * tt - 12 * t + 3) + p2.x * (-9 * tt + 6 * t) + p3.x * (3 * tt),
+            p0.y * (-3 * tt + 6 * t - 3) + p1.y * (9 * tt - 12 * t + 3) + p2.y * (-9 * tt + 6 * t) + p3.y * (3 * tt)};
+        return velocity;
+    }
     void render(SDL_Renderer *renderer, int numOfPoints) const
     {
         for (int i = 0; i < numOfPoints; ++i)
@@ -59,7 +67,7 @@ class Spline
     {
         curves.push_back(curve);
     }
-    void render(SDL_Renderer *renderer, int numOfPoints = 10)
+    void render(SDL_Renderer *renderer, int numOfPoints = 30)
     {
         for (auto curve : curves)
         {
@@ -101,6 +109,25 @@ class Spline
             }
         }
     }
+    void newCurve(SDL_Point mousePos)
+    {
+        SDL_FPoint velocity = curves.back().velocity(1);
+        SDL_Point lastPoint = curves.back().p3;
+        CubicBezier curve(lastPoint, {static_cast<int>(velocity.x), static_cast<int>(velocity.y)}, {100, 100},
+                          mousePos);
+        curves.push_back(curve);
+        std::cout << velocity.x << "," << velocity.y << std::endl;
+    }
+    void showVelocity(SDL_Renderer *renderer, float u)
+    {
+        int index = static_cast<int>(u);
+        float t = u - index;
+        CubicBezier curve = curves[index];
+        SDL_FPoint m = curve.evaluate(t);
+        SDL_FPoint n = curve.velocity(t);
+        SDL_RenderDrawLine(renderer, static_cast<int>(m.x), static_cast<int>(m.y), static_cast<int>(n.x),
+                           static_cast<int>(n.y));
+    }
     void getInfo() const
     {
         int curveIndex = 0;
@@ -141,7 +168,7 @@ int main()
 
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255); // White rectangles
         spline.render(renderer);
-
+        spline.showVelocity(renderer, 1.3);
         switch (event.type)
         {
         case SDL_QUIT:
@@ -174,6 +201,8 @@ int main()
             {
                 leftMouseButtonDown = true;
                 selectedPoint = spline.getSelectedPoint(mousePos);
+                if (selectedPoint == nullptr)
+                    spline.newCurve(mousePos);
             }
         default:
             break;
