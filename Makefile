@@ -1,13 +1,19 @@
-CC = g++
-CFLAGS = -Wall -g
+CXX = g++
+CXXFLAGS = -Wall -Wextra -std=c++11 `sdl2-config --cflags`
 LDFLAGS = `sdl2-config --cflags --libs`
+SRCS = main.cpp CubicBezier.cpp Spline.cpp
+HEADERS = CubicBezier.h Spline.h
+OBJS = $(SRCS:.cpp=.o)
 TARGET = main 
-SRC = main.cpp
 
 all: $(TARGET)
+$(TARGET): $(OBJS)
+	$(CXX) $(OBJS) -o $(TARGET) $(LDFLAGS)
 
-$(TARGET): $(SRC)
-	$(CC) $(CFLAGS) -o $(TARGET) $(SRC) $(LDFLAGS)
+%.o: %.cpp $(HEADERS)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(TARGET)
+	rm -f $(OBJS) $(TARGET)
+
+.PHONY: all clean
