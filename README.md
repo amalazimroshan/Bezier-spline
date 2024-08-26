@@ -1,1 +1,1 @@
-# Beauty Of Bezier Curve
+Bézier spline
