@@ -1,11 +1,40 @@
+// Spline.cpp
 #include "Spline.h"
 #include <cmath>
 #include <iostream>
+
+namespace
+{
+constexpr double PI = 3.14159265358979323846;
+constexpr double DEG_TO_RAD = PI / 180.0;
+constexpr int PROXIMITY_THRESHOLD = 10;
+
+SDL_Point calculateMidPoint(const SDL_Point &p1, const SDL_Point &p2)
+{
+    return {(p1.x + p2.x) / 2, (p1.y + p2.y) / 2};
+}
+
+SDL_Point rotatePoint(const SDL_Point &center, const SDL_Point &point, double angleRad)
+{
+    int dx = point.x - center.x;
+    int dy = point.y - center.y;
+    double cos_angle = cos(angleRad);
+    double sin_angle = sin(angleRad);
+    return {center.x + static_cast<int>(dx * cos_angle - dy * sin_angle),
+            center.y + static_cast<int>(dx * sin_angle + dy * cos_angle)};
+}
+
+bool isClockwise(const SDL_Point &p1, const SDL_Point &p2, const SDL_Point &p3)
+{
+    return (p2.x - p1.x) * (p3.y - p1.y) - (p2.y - p1.y) * (p3.x - p1.x) < 0;
+}
+} // namespace
 
 void Spline::addCurve(const CubicBezier &curve)
 {
     curves.push_back(curve);
 }
+
 void Spline::render(SDL_Renderer *renderer, int numOfPoints)
 {
     for (auto &curve : curves)
@@ -14,6 +43,7 @@ void Spline::render(SDL_Renderer *renderer, int numOfPoints)
         curve.drawControlPoints(renderer);
     }
 }
+
 SDL_Point *Spline::getSelectedPoint(const SDL_Point &mousePos)
 {
     for (size_t i = 0; i < curves.size(); ++i)
@@ -30,10 +60,10 @@ SDL_Point *Spline::getSelectedPoint(const SDL_Point &mousePos)
     }
     return nullptr;
 }
+
 void Spline::updatePoint(SDL_Point *point, SDL_Point mousePos)
 {
-    point->x = mousePos.x;
-    point->y = mousePos.y;
+    *point = mousePos;
     for (size_t i = 0; i < curves.size(); ++i)
     {
         if (point == &curves[i].p3 && i < curves.size() - 1)
@@ -48,38 +78,25 @@ void Spline::updatePoint(SDL_Point *point, SDL_Point mousePos)
         }
     }
 }
+
 void Spline::newCurve(SDL_Point mousePos)
 {
-    SDL_Point startPoint = curves.back().p3;
-    SDL_Point endPoint = mousePos;
-    SDL_Point midPoint = {(startPoint.x + endPoint.x) / 2, (startPoint.y + endPoint.y) / 2};
+    const SDL_Point &startPoint = curves.back().p3;
+    const SDL_Point &endPoint = mousePos;
+    SDL_Point midPoint = calculateMidPoint(startPoint, endPoint);
 
-    int dx = startPoint.x - midPoint.x;
-    int dy = startPoint.y - midPoint.y;
-    SDL_Point origin = curves.back().p2;
-    int cross = (origin.x - startPoint.x) * (mousePos.y - startPoint.y) -
-                (origin.y - startPoint.y) * (mousePos.x - startPoint.x);
-    double angleRad1;
-    double angleRad2;
-    if (cross < 0)
-    {
-        angleRad1 = 45 * M_PI / 180.0;
-        angleRad2 = 135 * M_PI / 180.0;
-    }
-    else
-    {
-        angleRad1 = 312 * M_PI / 180.0;
-        angleRad2 = 225 * M_PI / 180.0;
-    }
-    int rotatedDx = static_cast<int>(dx * cos(angleRad1) - dy * sin(angleRad1));
-    int rotatedDy = static_cast<int>(dx * sin(angleRad1) + dy * cos(angleRad1));
-    SDL_Point rotatedEnd1 = {midPoint.x + rotatedDx, midPoint.y + rotatedDy};
-    rotatedDx = static_cast<int>(dx * cos(angleRad2) - dy * sin(angleRad2));
-    rotatedDy = static_cast<int>(dx * sin(angleRad2) + dy * cos(angleRad2));
-    SDL_Point rotatedEnd2 = {midPoint.x + rotatedDx, midPoint.y + rotatedDy};
-    CubicBezier newCurve(startPoint, rotatedEnd1, rotatedEnd2, endPoint);
-    curves.push_back(newCurve);
+    const SDL_Point &previousControlPoint = curves.back().p2;
+    bool clockwise = isClockwise(previousControlPoint, startPoint, mousePos);
+
+    double angle1 = clockwise ? 312 * DEG_TO_RAD : 45 * DEG_TO_RAD;
+    double angle2 = clockwise ? 225 * DEG_TO_RAD : 135 * DEG_TO_RAD;
+
+    SDL_Point rotatedEnd1 = rotatePoint(midPoint, startPoint, angle1);
+    SDL_Point rotatedEnd2 = rotatePoint(midPoint, startPoint, angle2);
+
+    curves.emplace_back(startPoint, rotatedEnd1, rotatedEnd2, endPoint);
 }
+
 void Spline::showTangent(SDL_Renderer *renderer, float u)
 {
     int index = static_cast<int>(u);
@@ -101,6 +118,7 @@ void Spline::showTangent(SDL_Renderer *renderer, float u)
         SDL_RenderDrawLineF(renderer, point.x, point.y, endPoint.x, endPoint.y);
     }
 }
+
 void Spline::showVelocity(SDL_Renderer *renderer, float u)
 {
     int index = static_cast<int>(u);
@@ -114,14 +132,18 @@ void Spline::showVelocity(SDL_Renderer *renderer, float u)
         SDL_RenderDrawLineF(renderer, point.x, point.y, endPoint.x, endPoint.y);
     }
 }
+
 void Spline::removeCurve()
 {
     if (curves.size() > 1)
+    {
         curves.pop_back();
+    }
 }
+
 bool Spline::isWithinProximity(const SDL_Point &p, const SDL_Point &mousePos) const
 {
     int dx = p.x - mousePos.x;
     int dy = p.y - mousePos.y;
-    return sqrt(dx * dx + dy * dy) <= 10;
+    return (dx * dx + dy * dy) <= PROXIMITY_THRESHOLD * PROXIMITY_THRESHOLD;
 }
